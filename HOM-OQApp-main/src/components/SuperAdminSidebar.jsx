@@ -4,7 +4,7 @@ import { useNavigate, useLocation } from "react-router-dom";
 import { UserAuth } from "../context/AuthContext";
 import oqaLogo from "../assets/oqa-logo.png";
 import userPlaceholder from "../assets/user-placeholder.png";
-import { FaHome, FaUser, FaSignOutAlt } from "react-icons/fa";
+import { FaHome, FaUser, FaSignOutAlt, FaSlack } from "react-icons/fa";
 import MetricsIcon from "../assets/Metrics-chart.svg";
 import logsIcon from "../assets/logs.svg";
 
@@ -54,6 +54,14 @@ export function SuperAdminSidebar() {
         >
           <FaUser />
           <Tooltip className="tooltip">Members</Tooltip>
+        </NavItem>
+        {/* Slack Report */}
+        <NavItem
+          active={location.pathname === "/admin/slack-report"}
+          onClick={() => navigate("/admin/slack-report")}
+        >
+          <FaSlack />
+          <Tooltip className="tooltip">Slack Report</Tooltip>
         </NavItem>
         {/* Audit Logs */}
         <NavItem

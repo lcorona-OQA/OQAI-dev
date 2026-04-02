@@ -20,6 +20,7 @@ import { AllDevicesPage } from "../pages/AllDevicesPage";
 import { DeviceLogsPage } from "../pages/DeviceLogsPage";
 import AuditLogsPage  from "../pages/AuditLogsPage";
 import { SuperAdminMetricsPage } from "../pages/SuperAdminMetricsPage";
+import { SlackReportPage } from "../pages/SlackReportPage";
 
 /* =========================================================
    HORARIO DE BLOQUEO (GMT-7) PARA ROLES ESPECÍFICOS
@@ -599,6 +600,14 @@ export function MyRoutes() {
           <InventProtectedRoute>
             <DeviceLogsPage />
           </InventProtectedRoute>
+        }
+      />
+      <Route
+        path="/admin/slack-report"
+        element={
+          <SuperAdminProtectedRoute>
+            <SlackReportPage />
+          </SuperAdminProtectedRoute>
         }
       />
 
