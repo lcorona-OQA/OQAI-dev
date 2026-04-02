@@ -1,0 +1,29 @@
+name: Deploy Local
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build-and-deploy:
+    # IMPORTANTE: Esto le dice que use TU servidor, no el de GitHub
+    runs-on: self-hosted
+
+    steps:
+    # 1. Baja el código
+    - name: Checkout Code
+      uses: actions/checkout@v4
+      with:
+        clean: false
+
+    # 2. Instala dependencias
+    - name: Install Dependencies
+      run: npm install
+
+    # 3. Construye la aplicación
+    - name: Build
+      run: npm run build
+
+    # 4. Recarga PM2 (o lo inicia si está apagado)
+    - name: Reload PM2
+      run: pm2 reload mi-app || pm2 start "serve -s dist -l 3000" --name "OQAPP"

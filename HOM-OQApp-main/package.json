@@ -1,0 +1,61 @@
+{
+  "name": "1-auth-supabase",
+  "version": "0.1.1",
+  "private": true,
+  "type": "module",
+  "main": "electron/main.js",
+  "scripts": {
+    "dev": "vite --host",
+    "build": "vite build",
+    "preview": "vite --host",
+    "electron": "npm run build && electron electron/main.js",
+    "dist": "npm run build && electron-builder"
+  },
+  "dependencies": {
+    "@rsuite/icons": "^1.0.2",
+    "@supabase/supabase-js": "^2.12.1",
+    "date-fns": "^4.1.0",
+    "emoji-picker-react": "^4.4.9",
+    "googleapis": "^166.0.0",
+    "react": "^18.2.0",
+    "react-calendar": "^6.0.0",
+    "react-color": "^2.19.3",
+    "react-content-loader": "^6.2.1",
+    "react-countup": "^6.5.3",
+    "react-datepicker": "^8.9.0",
+    "react-dom": "^18.2.0",
+    "react-hook-form": "^7.44.3",
+    "react-hot-toast": "^2.6.0",
+    "react-icons": "^4.12.0",
+    "react-router-dom": "^6.9.0",
+    "react-spinners": "^0.13.8",
+    "react-toastify": "^11.0.5",
+    "recharts": "^3.6.0",
+    "styled-components": "^5.3.9",
+    "sweetalert2": "^11.7.5"
+  },
+  "devDependencies": {
+    "@types/react": "^18.0.28",
+    "@types/react-dom": "^18.0.11",
+    "@vitejs/plugin-react": "^5.0.4",
+    "baseline-browser-mapping": "^2.9.6",
+    "electron": "^39.2.4",
+    "electron-builder": "^26.0.12",
+    "vite": "^7.1.9"
+  },
+  "build": {
+    "appId": "com.outpostqa.HO-oqapp",
+    "productName": "OQApp",
+    "directories": {
+      "output": "dist_electron"
+    },
+    "files": [
+      "electron/main.js",
+      "dist/**/*"
+    ],
+    "win": {
+      "target": "nsis",
+      "icon": "build/icon.ico"
+    }
+  }
+}

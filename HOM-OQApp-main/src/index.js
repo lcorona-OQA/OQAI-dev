@@ -1,0 +1,11 @@
+export { default as App } from './App';
+export * from './components/Perfil';
+export * from './context/AuthContext';
+export * from './context/CrudContext';
+export * from './main';
+export * from './pages/Login';
+export * from './pages/Perfil';
+export * from './routers/routes';
+export * from './styles/Themes';
+export * from './supabase/crudUsuarios';
+export * from './supabase/supabase.config';
