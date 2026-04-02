@@ -406,6 +406,62 @@ function InventProtectedRoute({ children }) {
   }
 }
 
+// Guardia de ruta para Slack Report (rol 11)
+function SlackReportProtectedRoute({ children }) {
+  const { user } = UserAuth();
+  const [userRole, setUserRole] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const slackReportRole = [11];
+
+  useEffect(() => {
+    async function fetchUserRole() {
+      if (!user) {
+        setLoading(false);
+        return;
+      }
+      const { data, error } = await supabase
+        .from("users")
+        .select("role_id")
+        .eq("id", user.id)
+        .single();
+
+      if (!error && data) {
+        setUserRole(data.role_id);
+      }
+      setLoading(false);
+    }
+    fetchUserRole();
+  }, [user]);
+
+  if (loading || user === undefined) {
+    return (
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "center",
+          width: "100vw",
+          height: "100vh",
+          backgroundColor: "#2b2f38",
+          color: "white",
+        }}
+      >
+        Verificando tu rol...
+      </div>
+    );
+  }
+
+  if (user === null) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (slackReportRole.includes(userRole)) {
+    return children;
+  } else {
+    return <Navigate to="/dashboard" replace />;
+  }
+}
+
 // Guardia de ruta para Team Lead (rol 5)
 function TeamLeadProtectedRoute({ children }) {
   const { user } = UserAuth();
@@ -605,9 +661,9 @@ export function MyRoutes() {
       <Route
         path="/admin/slack-report"
         element={
-          <SuperAdminProtectedRoute>
+          <SlackReportProtectedRoute>
             <SlackReportPage />
-          </SuperAdminProtectedRoute>
+          </SlackReportProtectedRoute>
         }
       />
 

@@ -1,7 +1,11 @@
 import { useState, useEffect, useCallback } from "react";
 import styled from "styled-components";
-import { SuperAdminSidebar } from "../components/SuperAdminSidebar";
-import { FaSlack, FaFilePdf, FaSync, FaHashtag, FaUser, FaCalendarAlt, FaSearch, FaCheckCircle, FaExclamationTriangle } from "react-icons/fa";
+import { useNavigate } from "react-router-dom";
+import { UserAuth } from "../context/AuthContext";
+import { supabase } from "../supabase/supabase.config";
+import oqaLogo from "../assets/oqa-logo.png";
+import userPlaceholder from "../assets/user-placeholder.png";
+import { FaSlack, FaFilePdf, FaSync, FaHashtag, FaUser, FaCalendarAlt, FaSearch, FaCheckCircle, FaExclamationTriangle, FaSignOutAlt } from "react-icons/fa";
 import jsPDF from "jspdf";
 import "jspdf-autotable";
 
@@ -420,7 +424,7 @@ export function SlackReportPage() {
 
   return (
     <MainContent>
-      <SuperAdminSidebar />
+      <SlackSidebar />
       <ContentArea>
         <PageHeader>
           <HeaderIcon>
@@ -585,8 +589,183 @@ export function SlackReportPage() {
 }
 
 // ---------------------------------------------------------------------------
+// Slack Sidebar (dedicated sidebar for role 11 users)
+// ---------------------------------------------------------------------------
+
+function SlackSidebar() {
+  const { signout, user } = UserAuth();
+  const navigate = useNavigate();
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
+
+  const handleSignout = async () => {
+    try {
+      await signout();
+      navigate("/login");
+    } catch (error) {
+      console.error("Error al cerrar sesión:", error);
+    }
+  };
+
+  const userPhoto = user?.user_metadata?.picture || userPlaceholder;
+
+  return (
+    <SidebarContainer>
+      <SidebarLogo src={oqaLogo} alt="OQA logo" />
+      <SidebarNavItems>
+        <SidebarNavItem active>
+          <FaSlack />
+          <SidebarTooltip className="tooltip">Slack Report</SidebarTooltip>
+        </SidebarNavItem>
+      </SidebarNavItems>
+      <SidebarBottomSection>
+        <SidebarProfile
+          onMouseEnter={() => setShowProfileMenu(true)}
+          onMouseLeave={() => setShowProfileMenu(false)}
+        >
+          <SidebarProfilePic src={userPhoto} />
+          <SidebarOnlineStatus />
+          {showProfileMenu && (
+            <SidebarProfileMenu>
+              <SidebarProfileMenuItem onClick={handleSignout}>
+                <FaSignOutAlt />
+                Cerrar Sesión
+              </SidebarProfileMenuItem>
+            </SidebarProfileMenu>
+          )}
+        </SidebarProfile>
+      </SidebarBottomSection>
+    </SidebarContainer>
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Styled Components
 // ---------------------------------------------------------------------------
+
+const SidebarContainer = styled.div`
+  background-color: #2b2f38;
+  padding: 25px 0;
+  display: flex;
+  height: 100vh;
+  border-top-right-radius: 25px;
+  border-bottom-right-radius: 25px;
+  box-shadow: 2px 0 5px rgba(0, 0, 0, 0.35);
+  flex-direction: column;
+  justify-content: space-between;
+  align-items: center;
+`;
+
+const SidebarLogo = styled.img`
+  width: 50px;
+`;
+
+const SidebarNavItems = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 15px;
+`;
+
+const SidebarNavItem = styled.div`
+  position: relative;
+  color: ${(props) => (props.active ? "#F7D000" : "#8c8c8c")};
+  font-size: 1.375rem;
+  padding: 10px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.3s ease-in-out;
+  background-color: ${(props) => (props.active ? "#3e4450" : "transparent")};
+
+  &:hover {
+    background-color: #3e4450;
+  }
+`;
+
+const SidebarTooltip = styled.span`
+  opacity: 0;
+  visibility: hidden;
+  position: absolute;
+  left: 60px;
+  background-color: #3e4450;
+  color: #fff;
+  padding: 5px 10px;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  white-space: nowrap;
+  z-index: 5;
+  transition: opacity 0.2s ease, visibility 0.2s ease;
+
+  ${SidebarNavItem}:hover & {
+    opacity: 1;
+    visibility: visible;
+  }
+`;
+
+const SidebarBottomSection = styled.div`
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 15px;
+`;
+
+const SidebarProfile = styled.div`
+  position: relative;
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  cursor: pointer;
+`;
+
+const SidebarProfilePic = styled.img`
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+`;
+
+const SidebarOnlineStatus = styled.div`
+  position: absolute;
+  bottom: 0;
+  right: 0;
+  width: 12px;
+  height: 12px;
+  background-color: #28a745;
+  border-radius: 50%;
+  border: 2px solid #2b2f38;
+`;
+
+const SidebarProfileMenu = styled.div`
+  position: absolute;
+  top: 50%;
+  left: 45px;
+  transform: translateY(-50%);
+  background-color: #2b2f38;
+  border-radius: 8px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+  padding: 10px;
+  white-space: nowrap;
+  z-index: 10;
+`;
+
+const SidebarProfileMenuItem = styled.div`
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  color: #8c8c8c;
+  cursor: pointer;
+
+  &:hover {
+    background-color: #3e4450;
+    color: #ff0000;
+  }
+
+  svg {
+    font-size: 1.2rem;
+  }
+`;
 
 const MainContent = styled.div`
   display: grid;
