@@ -166,144 +166,107 @@ export function CentralPanel({ employee, onEmployeeUpdated }) {
     (employee?.role_id ? `Role ${employee.role_id}` : 'Sin rol');
 
   // --- FUNCIÓN PARA DESACTIVAR ---
- // Dentro de tu AdminEmployeesPanel / CentralPanel
+  const handleDeactivate = async () => {
+    const { isConfirmed } = await Swal.fire({
+      title: 'Deactivate employee?',
+      text: `This will disable ${employee.display_name}.`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: 'Yes, deactivate',
+      confirmButtonColor: '#d33',
+    });
 
-const handleDeactivate = async (employee) => {
-  const { isConfirmed } = await Swal.fire({
-    title: 'Deactivate employee?',
-    text: `This will disable ${employee.display_name}.`,
-    icon: 'warning',
-    showCancelButton: true,
-    confirmButtonText: 'Yes, deactivate',
-    confirmButtonColor: '#d33',
-  });
+    if (!isConfirmed) return;
 
-  if (!isConfirmed) return;
+    const nowIso = new Date().toISOString();
 
-  const nowIso = new Date().toISOString();
-
-  const { error } = await supabase
-    .from('users')
-    .update({
-      is_active: false,
-      deactivated_at: nowIso,
-    })
-    .eq('id', employee.id);
-
-  if (error) {
-    console.error('[AdminEmployeesPanel] Error deactivating user:', error);
-    Swal.fire('Error', 'Could not deactivate user.', 'error');
-    return;
-  }
-
-  // AUDIT LOG: desactivación
-  try {
-    await supabase.rpc('insert_audit_event', {
-      p_action_type: 'deactivate_user',
-      p_entity_type: 'user',
-      p_entity_id: employee.id,
-      p_summary: `User deactivated desde AdminEmployeesPanel`,
-      p_metadata: {
-        reason: 'manual',
+    const { error } = await supabase
+      .from('users')
+      .update({
+        is_active: false,
         deactivated_at: nowIso,
-      },
-      p_source: 'web:admin-employees',
+      })
+      .eq('id', employee.id);
+
+    if (error) {
+      console.error('[CentralPanel] Error deactivating user:', error);
+      Swal.fire('Error', 'Could not deactivate user.', 'error');
+      return;
+    }
+
+    // AUDIT LOG: desactivación
+    try {
+      await supabase.rpc('insert_audit_event', {
+        p_action_type: 'deactivate_user',
+        p_entity_type: 'user',
+        p_entity_id: employee.id,
+        p_summary: `User deactivated from CentralPanel`,
+        p_metadata: {
+          reason: 'manual',
+          deactivated_at: nowIso,
+        },
+        p_source: 'web:admin-employees',
+      });
+    } catch (auditErr) {
+      console.error(
+        '[CentralPanel] Error insertando audit_event (deactivate_user):',
+        auditErr,
+      );
+    }
+
+    Swal.fire('Done', 'User deactivated.', 'success');
+    await refreshEmployeeData();
+  };
+
+  // --- FUNCIÓN PARA ACTIVAR ---
+  const handleActivate = async () => {
+    const { isConfirmed } = await Swal.fire({
+      title: 'Activate employee?',
+      text: `This will re-enable ${employee.display_name}.`,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: 'Yes, activate',
+      confirmButtonColor: '#3b5bdb',
     });
-  } catch (auditErr) {
-    console.error(
-      '[AdminEmployeesPanel] Error insertando audit_event (deactivate_user):',
-      auditErr,
-    );
-  }
 
-  Swal.fire('Done', 'User deactivated.', 'success');
-  fetchEmployees(); // o el refresco que ya tengas
-};
+    if (!isConfirmed) return;
 
-const handleActivate = async (employee) => {
-  const { isConfirmed } = await Swal.fire({
-    title: 'Activate employee?',
-    text: `This will re-enable ${employee.display_name}.`,
-    icon: 'question',
-    showCancelButton: true,
-    confirmButtonText: 'Yes, activate',
-    confirmButtonColor: '#3b5bdb',
-  });
+    const { error } = await supabase
+      .from('users')
+      .update({
+        is_active: true,
+        deactivated_at: null,
+      })
+      .eq('id', employee.id);
 
-  if (!isConfirmed) return;
+    if (error) {
+      console.error('[CentralPanel] Error activating user:', error);
+      Swal.fire('Error', 'Could not activate user.', 'error');
+      return;
+    }
 
-  const { error } = await supabase
-    .from('users')
-    .update({
-      is_active: true,
-      deactivated_at: null,
-    })
-    .eq('id', employee.id);
+    // AUDIT LOG: reactivación
+    try {
+      await supabase.rpc('insert_audit_event', {
+        p_action_type: 'activate_user',
+        p_entity_type: 'user',
+        p_entity_id: employee.id,
+        p_summary: `User activated from CentralPanel`,
+        p_metadata: {
+          reason: 'manual',
+        },
+        p_source: 'web:admin-employees',
+      });
+    } catch (auditErr) {
+      console.error(
+        '[CentralPanel] Error insertando audit_event (activate_user):',
+        auditErr,
+      );
+    }
 
-  if (error) {
-    console.error('[AdminEmployeesPanel] Error activating user:', error);
-    Swal.fire('Error', 'Could not activate user.', 'error');
-    return;
-  }
-
-  // AUDIT LOG: reactivación
-  try {
-    await supabase.rpc('insert_audit_event', {
-      p_action_type: 'activate_user',
-      p_entity_type: 'user',
-      p_entity_id: employee.id,
-      p_summary: `User activated desde AdminEmployeesPanel`,
-      p_metadata: {
-        reason: 'manual',
-      },
-      p_source: 'web:admin-employees',
-    });
-  } catch (auditErr) {
-    console.error(
-      '[AdminEmployeesPanel] Error insertando audit_event (activate_user):',
-      auditErr,
-    );
-  }
-
-  Swal.fire('Done', 'User activated.', 'success');
-  fetchEmployees();
-};
-
-// Si tienes un handler para guardar cambios en el perfil (rol, team, etc.)
-const handleSaveEmployee = async (employeeId, patch) => {
-  const { error } = await supabase
-    .from('users')
-    .update(patch)
-    .eq('id', employeeId);
-
-  if (error) {
-    console.error('[AdminEmployeesPanel] Error updating user:', error);
-    Swal.fire('Error', 'Could not update user.', 'error');
-    return;
-  }
-
-  // AUDIT LOG: actualización de perfil
-  try {
-    await supabase.rpc('insert_audit_event', {
-      p_action_type: 'update_user',
-      p_entity_type: 'user',
-      p_entity_id: employeeId,
-      p_summary: `User updated desde AdminEmployeesPanel`,
-      p_metadata: {
-        patch,
-      },
-      p_source: 'web:admin-employees',
-    });
-  } catch (auditErr) {
-    console.error(
-      '[AdminEmployeesPanel] Error insertando audit_event (update_user):',
-      auditErr,
-    );
-  }
-
-  Swal.fire('Saved', 'User updated.', 'success');
-  fetchEmployees();
-};
+    Swal.fire('Done', 'User activated.', 'success');
+    await refreshEmployeeData();
+  };
   // Helper para refrescar la data y avisar al padre
   const refreshEmployeeData = async () => {
     const { data: updatedEmployeeWithRelations, error: fetchError } = await supabase
