@@ -15,18 +15,92 @@ import "jspdf-autotable";
 
 const SLACK_API = "https://slack.com/api";
 
+const SLACK_ERROR_MESSAGES = {
+  invalid_auth: "Invalid Slack token. Please check your Bot Token and try again.",
+  token_revoked: "This Slack token has been revoked. Please generate a new Bot Token.",
+  token_expired: "This Slack token has expired. Please generate a new Bot Token.",
+  not_authed: "No authentication token provided. Please enter a valid Bot Token.",
+  account_inactive: "The Slack account associated with this token has been deactivated.",
+  missing_scope: "This token is missing required permissions. Ensure the bot has channels:read, channels:history, groups:read, groups:history, and users:read scopes.",
+  channel_not_found: "The requested channel could not be found. It may have been deleted.",
+  not_in_channel: "The bot is not a member of this channel. Please invite the bot to the channel first.",
+  is_archived: "This channel has been archived and its history is no longer accessible.",
+  ratelimited: "Slack rate limit reached. Please wait a moment and try again.",
+  org_login_required: "Your Slack organization requires login. Please re-authenticate.",
+  ekm_access_denied: "Access denied by Enterprise Key Management.",
+  access_denied: "Access denied. The bot does not have permission to access this resource.",
+  no_permission: "The bot does not have permission to perform this action.",
+  fatal_error: "Slack experienced an internal error. Please try again later.",
+  request_timeout: "The request to Slack timed out. Please check your network connection and try again.",
+};
+
+const MAX_RATE_LIMIT_RETRIES = 3;
+
+function friendlySlackError(errorCode) {
+  return SLACK_ERROR_MESSAGES[errorCode] || `Slack API error: ${errorCode}`;
+}
+
 async function slackFetch(method, token, params = {}) {
   const url = new URL(`${SLACK_API}/${method}`);
   Object.entries(params).forEach(([k, v]) => {
     if (v !== undefined && v !== null) url.searchParams.set(k, v);
   });
 
-  const res = await fetch(url.toString(), {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  const json = await res.json();
-  if (!json.ok) throw new Error(json.error || "Slack API error");
-  return json;
+  let lastError = null;
+  for (let attempt = 0; attempt <= MAX_RATE_LIMIT_RETRIES; attempt++) {
+    let res;
+    try {
+      res = await fetch(url.toString(), {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+    } catch (networkErr) {
+      throw new Error(
+        "Network error: Unable to reach Slack. Please check your internet connection and try again."
+      );
+    }
+
+    // Handle HTTP-level rate limiting (429)
+    if (res.status === 429) {
+      const retryAfter = parseInt(res.headers.get("Retry-After") || "5", 10);
+      if (attempt < MAX_RATE_LIMIT_RETRIES) {
+        await new Promise((resolve) => setTimeout(resolve, retryAfter * 1000));
+        continue;
+      }
+      throw new Error(friendlySlackError("ratelimited"));
+    }
+
+    if (!res.ok && res.status !== 200) {
+      throw new Error(
+        `Slack returned HTTP ${res.status}. Please try again later.`
+      );
+    }
+
+    let json;
+    try {
+      json = await res.json();
+    } catch (parseErr) {
+      throw new Error(
+        "Failed to parse Slack response. The API may be temporarily unavailable."
+      );
+    }
+
+    // Handle Slack-level rate limiting
+    if (!json.ok && json.error === "ratelimited") {
+      const retryAfter = parseInt(res.headers.get("Retry-After") || "5", 10);
+      if (attempt < MAX_RATE_LIMIT_RETRIES) {
+        await new Promise((resolve) => setTimeout(resolve, retryAfter * 1000));
+        continue;
+      }
+      throw new Error(friendlySlackError("ratelimited"));
+    }
+
+    if (!json.ok) {
+      throw new Error(friendlySlackError(json.error));
+    }
+    return json;
+  }
+
+  throw lastError || new Error(friendlySlackError("ratelimited"));
 }
 
 async function fetchChannels(token) {
@@ -289,11 +363,18 @@ export function SlackReportPage() {
   const [searchTerm, setSearchTerm] = useState("");
   const [generating, setGenerating] = useState(false);
   const [status, setStatus] = useState("");
+  const [warnings, setWarnings] = useState([]);
 
   // Connect to Slack
   const handleConnect = useCallback(async () => {
     if (!token.trim()) {
       setError("Please enter a Slack Bot Token.");
+      return;
+    }
+    if (!token.trim().startsWith("xoxb-") && !token.trim().startsWith("xoxp-")) {
+      setError(
+        "Invalid token format. Slack Bot Tokens start with 'xoxb-' and User Tokens start with 'xoxp-'. Please check your token."
+      );
       return;
     }
     setLoading(true);
@@ -321,7 +402,7 @@ export function SlackReportPage() {
       setConnected(true);
       setStatus(`Connected! Found ${channelList.length} channels.`);
     } catch (err) {
-      setError(err.message || "Failed to connect to Slack.");
+      setError(err.message || "Failed to connect to Slack. Please verify your token and try again.");
       setStatus("");
     } finally {
       setLoading(false);
@@ -359,6 +440,7 @@ export function SlackReportPage() {
     }
     setGenerating(true);
     setError("");
+    setWarnings([]);
     setStatus("Fetching messages...");
 
     try {
@@ -368,6 +450,7 @@ export function SlackReportPage() {
         : undefined;
 
       const channelData = [];
+      const channelErrors = [];
       for (let i = 0; i < selectedChannels.length; i++) {
         const chId = selectedChannels[i];
         const ch = channels.find((c) => c.id === chId);
@@ -393,12 +476,25 @@ export function SlackReportPage() {
           });
         } catch (chErr) {
           console.warn(`Could not fetch #${ch?.name}: ${chErr.message}`);
+          channelErrors.push(`#${ch?.name || chId}: ${chErr.message}`);
           channelData.push({
             id: chId,
             name: ch?.name || chId,
             messages: [],
           });
         }
+      }
+
+      if (channelErrors.length > 0) {
+        setWarnings(channelErrors);
+      }
+
+      if (channelData.every((ch) => ch.messages.length === 0) && channelErrors.length > 0) {
+        setError(
+          "Could not fetch messages from any of the selected channels. Please check that the bot has been invited to these channels and has the required permissions."
+        );
+        setStatus("");
+        return;
       }
 
       setStatus("Generating PDF...");
@@ -413,9 +509,13 @@ export function SlackReportPage() {
         teamName: teamInfo,
       });
 
-      setStatus("PDF generated and downloaded successfully!");
+      setStatus(
+        channelErrors.length > 0
+          ? `PDF generated with warnings — ${channelErrors.length} channel(s) could not be fetched.`
+          : "PDF generated and downloaded successfully!"
+      );
     } catch (err) {
-      setError(err.message || "Failed to generate report.");
+      setError(err.message || "Failed to generate report. Please try again.");
       setStatus("");
     } finally {
       setGenerating(false);
@@ -480,6 +580,8 @@ export function SlackReportPage() {
                   setSelectedChannels([]);
                   setToken("");
                   setStatus("");
+                  setError("");
+                  setWarnings([]);
                 }}
               >
                 Disconnect
@@ -577,6 +679,19 @@ export function SlackReportPage() {
           <StatusBar>
             <FaCheckCircle /> {status}
           </StatusBar>
+        )}
+        {warnings.length > 0 && (
+          <WarningBar>
+            <FaExclamationTriangle />
+            <WarningContent>
+              <span>Some channels could not be fetched:</span>
+              <WarningList>
+                {warnings.map((w, i) => (
+                  <li key={i}>{w}</li>
+                ))}
+              </WarningList>
+            </WarningContent>
+          </WarningBar>
         )}
         {error && (
           <ErrorBar>
@@ -1181,4 +1296,33 @@ const ErrorBar = styled.div`
   background: #3a1a1a;
   color: #ff6b6b;
   font-size: 0.9rem;
+`;
+
+const WarningBar = styled.div`
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 12px 18px;
+  border-radius: 8px;
+  background: #3a2e1a;
+  color: #ffb347;
+  font-size: 0.9rem;
+
+  svg {
+    flex-shrink: 0;
+    margin-top: 2px;
+  }
+`;
+
+const WarningContent = styled.div`
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+`;
+
+const WarningList = styled.ul`
+  margin: 0;
+  padding-left: 18px;
+  font-size: 0.85rem;
+  color: #e0c080;
 `;
